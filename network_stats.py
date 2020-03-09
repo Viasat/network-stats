@@ -11,6 +11,7 @@ connections (5-tuples) rather than individual packets.
 import argparse
 from time import sleep
 
+import ipaddress
 import pcapy
 import impacket
 from impacket import ImpactDecoder
@@ -22,7 +23,11 @@ class _ConnectionKey(object):
         of the source and destination. The primary purpose of this class is to allow TCP/UDP
         connections to be used as keys in native Python dictionaries.
     """
-    def __init__(self, ip1, port1, ip2, port2, proto):
+    def non_local_init(self, ip1, port1, ip2, port2, proto):
+        """ Initialize the ConnectionKey without regard to the whether the IP address of
+            IP1 or IP2 are on the local network.
+            The connection_key puts the smaller IP address in IP1. It breaks ties with port number.
+        """
         if(ip1 < ip2 or ((ip1 == ip2) and (port1 <= port2))):
             self.ip1 = ip1
             self.port1 = port1
@@ -35,6 +40,38 @@ class _ConnectionKey(object):
             self.ip2 = ip1
             self.port2 = port1
             self.proto = proto
+
+    def __init__(self, ip1, port1, ip2, port2, proto, local_network=None):
+        """ Initialize the ConnectionKey. The primary decision this method must make is
+            which order to store the IP addresses (having consistent order aids in
+            determining equality and display). The algorithm is:
+            1. First, if either IP1 or IP2 are in local_network, and the other is not in the local_network
+               then that side of the connection is placed in the new connection key's IP1 variable.
+            2. (Inherited from behavior of non_local_init) If neither or both connections are in the
+               local_network, then the side with the smaller IP address will be placed in the new
+               connection key's IP1 variable.
+            3. (Inherited from behavior of non_local_init) As a tie break, the smaller port number will
+               be placed in the new connection key's IP1 variable.
+        """
+        ip1_obj = ipaddress.ip_address(ip1)
+        ip2_obj = ipaddress.ip_address(ip2)
+        if local_network is None:
+            self.non_local_init(ip1, port1, ip2, port2, proto)
+        elif ip1_obj in local_network and ip2_obj not in local_network:
+            self.ip1 = ip1
+            self.port1 = port1
+            self.ip2 = ip2
+            self.port2 = port2
+            self.proto = proto
+        elif ip2_obj in local_network and ip1_obj not in local_network:
+            self.ip1 = ip2
+            self.port1 = port2
+            self.ip2 = ip1
+            self.port2 = port1
+            self.proto = proto
+        else:
+            self.non_local_init(ip1, port1, ip2, port2, proto)
+
 
     def __hash__(self):
         return hash((self.ip1, self.port1, self.ip2, self.port2, self.proto))
@@ -98,7 +135,7 @@ def multi_out(cb_list):
     return multi_cb
 # End of output formatting functions
 
-def process_pkts(pktreader, output_cb, live):
+def process_pkts(pktreader, output_cb, live, local_network):
     """
     The primary processing loop. Pulls a packet from the passed in pktreader, increments the byte
     and packet count of the appropriate connection (creating the connection, if necessary), and
@@ -155,7 +192,7 @@ def process_pkts(pktreader, output_cb, live):
             elif isinstance(segment,UDP):
                 sport = segment.get_uh_sport()
                 dport = segment.get_uh_dport()
-            key = _ConnectionKey(src, sport, dst, dport, prot)
+            key = _ConnectionKey(src, sport, dst, dport, prot, local_network)
             if key not in conn_bucket:
                 conn_bucket[key] = {'1to2Bytes':0, '2to1Bytes':0, '1to2Packets':0, '2to1Packets':0}
             if(key.ip1 == src and key.port1 == sport and key.ip2 == dst and
@@ -184,12 +221,27 @@ if __name__ == "__main__":
     input_spec.add_argument("-p", "--pcap", help="Location of PCAP file to use as input.")
     cmd_parser.add_argument("-s", "--stdout", help="Print human-readable output to stdout", action="store_true")
     cmd_parser.add_argument("-c", "--csv", help="Output csv to file", type=argparse.FileType('w'))
+    cmd_parser.add_argument("-l", "--localnet", help="Subnet whose traffic should always be reported in the IP1 column. Generally used with the local network, so that all local traffic has data reported in same order (there won't be arbitrary flopping between IP1 and IP2. On a live capture, defaults to the capture interface's subnet. Example format: '192.168.0.0/24' and '10.1.2.3/32'")
     args = cmd_parser.parse_args()
     args_dict = vars(args)
 
     ###Setup PktReader
     pktreader = None
     live = False
+    local_network_str = None
+    local_network = None
+
+    if args.localnet is not None:
+        local_network_str = args.localnet
+    elif args.interface is not None:
+        temp_interface = pcapy.create(args_dict['interface'])
+        local_network_str = temp_interface.getnet() + "/" + temp_interface.getmask()
+
+    if local_network_str is not None:
+        try:
+            local_network = ipaddress.ip_network(local_network_str)
+        except:
+            pass
 
     # As inputs are mutually exclusive, we process these with normal if statements. Whichever flag
     # was set at the command line executes the corresponding code for opening the pktreader
@@ -212,6 +264,6 @@ if __name__ == "__main__":
         output_cbs.append(csvfile_out(args.csv))
 
     if pktreader is not None:
-        process_pkts(pktreader, multi_out(output_cbs), live)
+        process_pkts(pktreader, multi_out(output_cbs), live, local_network)
     else:
         print("Error: pktreader not initialized")
