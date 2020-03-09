@@ -21,6 +21,9 @@ Only one input may be selected
 -i/--interface - Uses the provided interface name to capture live packets from the applicable local network interface. The interface will be put into promiscuous mode. Which means: 1) this option may fail on standard user accounts and may need to be run as root/administrator or with an account with explicit permission to put the interface into promiscuous mode. 2) All traffic that can be seen by the interface will be captured, including traffic having nothing to do with the local machine. This would generally be most applicable when the interface is plugged into a monitor port on a switch.
 -p/--pcap - Opens the provided file and rapidly summarizes the flows found within. The file must be in PCAP format and be readable by the user account running the script.
 
+#### Modifier
+-l/--localnet - Subnet whose traffic should always be reported in the IP1 column. Generally used with the local network, so that all local traffic has data reported in same order (there won't be arbitrary flopping between IP1 and IP2. On a live capture, defaults to the capture interface's subnet. Example format: '192.168.0.0/24' and '10.1.2.3/32'
+
 #### Output
 Any number of outputs may be selected (though if none are selected, the tool won't be useful)
 -s/--stdout - Flag that tells the tool to output flow information to standard out. The output format is meant to be human readable.
