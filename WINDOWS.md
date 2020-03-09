@@ -3,13 +3,13 @@ Network stats relies on pcapy, which is a bit tricky to install on Windows. It i
 These instructions have been adapted from and updated: https://github.com/helpsystems/pcapy/wiki/Compiling-Pcapy-on-Windows-Guide
 
 1. Install Wireshark
-a. When npcap install screen comes up, check the winpcap compatibility box
+  1. When npcap install screen comes up, check the winpcap compatibility box
 
 2. Install Python 3.8
 
 3. Install Build Tools for Visual Studio 2019
-a. Download the tool: https://visualstudio.microsoft.com/downloads/ (open up Tools for Visual Studio 2019 then download Build Tools for Visual Studio 2019)
-b. Select C++ build tools
+  1. Download the tool: https://visualstudio.microsoft.com/downloads/ (open up Tools for Visual Studio 2019 then download Build Tools for Visual Studio 2019)
+  2. Select C++ build tools
 
 4. Download and extract WinPcap developer's pack (https://www.winpcap.org/devel.htm)
 
