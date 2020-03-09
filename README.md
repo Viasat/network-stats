@@ -3,9 +3,9 @@ This repository contains tools for compactly summarizing network traffic that is
 
 ## Setup
 Tools within this repository require:
-Python 3 - Tested on Python 3.8, but should support all other versions.
-Pcapy
-Impacket
+* Python 3 - Tested on Python 3.8, but should support all other versions.
+* Pcapy
+* Impacket
 
 For installation on Windows systems, see the WINDOWS file.
 
@@ -18,7 +18,11 @@ Network_stats.py outputs the number of bytes and packets on a per-second, per-co
 ### Options
 #### Input
 Only one input may be selected
--i/--interface - Uses the provided interface name to capture live packets from the applicable local network interface. The interface will be put into promiscuous mode. Which means: 1) this option may fail on standard user accounts and may need to be run as root/administrator or with an account with explicit permission to put the interface into promiscuous mode. 2) All traffic that can be seen by the interface will be captured, including traffic having nothing to do with the local machine. This would generally be most applicable when the interface is plugged into a monitor port on a switch.
+
+-i/--interface - Uses the provided interface name to capture live packets from the applicable local network interface. The interface will be put into promiscuous mode. Which means:
+1. This option may fail on standard user accounts and may need to be run as root/administrator or with an account with explicit permission to put the interface into promiscuous mode.
+2. All traffic that can be seen by the interface will be captured, including traffic having nothing to do with the local machine. This would generally be most applicable when the interface is plugged into a monitor port on a switch.
+
 -p/--pcap - Opens the provided file and rapidly summarizes the flows found within. The file must be in PCAP format and be readable by the user account running the script.
 
 #### Modifier
@@ -26,11 +30,14 @@ Only one input may be selected
 
 #### Output
 Any number of outputs may be selected (though if none are selected, the tool won't be useful)
+
 -s/--stdout - Flag that tells the tool to output flow information to standard out. The output format is meant to be human readable.
+
 -c/--csv - Uses the provided filename to create output in a comma separated format. The first line in the file is a header that describes each field. Note that if an existing file is specified, it will be entirely overwritten. Scripts and other tools should target the csv output. Tools should use the header to identify the fields they are interested in rather than blindly taking data from, say, the 3rd column. While column names will be fairly stable, new columns will be added over time, and the columns may be reordered.
 
 ### Examples
 `python network_stats.py -p test.pcap -s` - This command will cause network stats to open test.pcap and output summarized flow data to standard output
+
 `python network_stats.py -i eth0 -s -c testcsv.csv` - This command will cause network stats to monitor eth0 for packets and then output summarized flow data both to standard output and to testcsv.csv
 
 ## List_interfaces.py
