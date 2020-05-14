@@ -122,7 +122,37 @@ def csvfile_out(csvfile):
                 str(bucket[key]['1to2Bytes']),
                 str(bucket[key]['2to1Bytes']),
                 str(bucket[key]['1to2Packets']),
+                str(bucket[key]['2to1Packets'])
+            ]) + "\n")
+    return csv_cb
+
+def init_extfile(extfile):
+    """Initilizes csv file by writing the human-readable header"""
+    extfile.write('Time,IP1,Port1,IP2,Port2,Proto,1->2Bytes,2->1Bytes,1->2Pkts,2->1Pkts,packet_times,packet_sizes,packet_dirs\n')
+
+
+def extended_out(extfile):
+    """Returns a function that will write out connections from a {_ConnectionKey->{key->value}}
+       dictionary (where their keys are the properties of the connection).
+       The function is used as a callback for writing 'buckets'. Note that prior to using that
+       function, the passed in extfile should be initialized with init_extfile.
+    """
+    def csv_cb(bucket_time, bucket):
+        for key in bucket:
+            extfile.write(','.join([
+                str(bucket_time),
+                str(key.ip1),
+                str(key.port1),
+                str(key.ip2),
+                str(key.port2),
+                str(key.proto),
+                str(bucket[key]['1to2Bytes']),
+                str(bucket[key]['2to1Bytes']),
+                str(bucket[key]['1to2Packets']),
                 str(bucket[key]['2to1Packets']),
+                str(bucket[key]['packet_times']),
+                str(bucket[key]['packet_size']),
+                str(bucket[key]['packet_dir'])
             ]) + "\n")
     return csv_cb
 
@@ -135,7 +165,7 @@ def multi_out(cb_list):
     return multi_cb
 # End of output formatting functions
 
-def process_pkts(pktreader, output_cb, live, local_network):
+def process_pkts(pktreader, output_cb, live, local_network, packet_stats):
     """
     The primary processing loop. Pulls a packet from the passed in pktreader, increments the byte
     and packet count of the appropriate connection (creating the connection, if necessary), and
@@ -195,14 +225,25 @@ def process_pkts(pktreader, output_cb, live, local_network):
             key = _ConnectionKey(src, sport, dst, dport, prot, local_network)
             if key not in conn_bucket:
                 conn_bucket[key] = {'1to2Bytes':0, '2to1Bytes':0, '1to2Packets':0, '2to1Packets':0}
+                if packet_stats:
+                    conn_bucket[key]['packet_times'] = ''
+                    conn_bucket[key]['packet_size'] = ''
+                    conn_bucket[key]['packet_dir'] = ''
+            if packet_stats:
+                conn_bucket[key]['packet_times'] += str(int((pktts + pktms/1e6)*1000)) + ';'
+                conn_bucket[key]['packet_size'] += str(ip_len) + ';'
             if(key.ip1 == src and key.port1 == sport and key.ip2 == dst and
                key.port2 == dport and key.proto == prot):
                 conn_bucket[key]['1to2Bytes'] += ip_len
                 conn_bucket[key]['1to2Packets'] += 1
+                if packet_stats:
+                    conn_bucket[key]['packet_dir'] += "1;"
             elif (key.ip2 == src and key.port2 == sport and key.ip1 == dst and
                   key.port1 == dport and key.proto == prot):
                 conn_bucket[key]['2to1Bytes'] += ip_len
                 conn_bucket[key]['2to1Packets'] += 1
+                if packet_stats:
+                    conn_bucket[key]['packet_dir'] += "2;"
             else:
                 print("Dictionary returned unexpected key. Searched for: src:" + src + " dst: " +
                       dst + " source port: " + sport + " destination port: " + dport +
@@ -221,6 +262,7 @@ if __name__ == "__main__":
     input_spec.add_argument("-p", "--pcap", help="Location of PCAP file to use as input.")
     cmd_parser.add_argument("-s", "--stdout", help="Print human-readable output to stdout", action="store_true")
     cmd_parser.add_argument("-c", "--csv", help="Output csv to file", type=argparse.FileType('w'))
+    cmd_parser.add_argument("-e", "--extcsv", help="Output extended csv to file. Extended csv includes new columns that track the exact packet size, arrival time, and direction", type=argparse.FileType('w'))
     cmd_parser.add_argument("-l", "--localnet", help="Subnet whose traffic should always be reported in the IP1 column. Generally used with the local network, so that all local traffic has data reported in same order (there won't be arbitrary flopping between IP1 and IP2. On a live capture, defaults to the capture interface's subnet. Example format: '192.168.0.0/24' and '10.1.2.3/32'")
     args = cmd_parser.parse_args()
     args_dict = vars(args)
@@ -230,6 +272,7 @@ if __name__ == "__main__":
     live = False
     local_network_str = None
     local_network = None
+    packet_stats = False
 
     if args.localnet is not None:
         local_network_str = args.localnet
@@ -262,8 +305,15 @@ if __name__ == "__main__":
         init_csvfile(args.csv)
         #csvfile_out takes a filename and returns a callback that will write csvs to that file
         output_cbs.append(csvfile_out(args.csv))
+    if args.extcsv is not None:
+        packet_stats = True
+        #Add header to extended csv file
+        init_extfile(args.extcsv)
+        #extfile_out takes a filename and returns a callback that will write extended csvs to that file
+        output_cbs.append(extended_out(args.extcsv))
+
 
     if pktreader is not None:
-        process_pkts(pktreader, multi_out(output_cbs), live, local_network)
+        process_pkts(pktreader, multi_out(output_cbs), live, local_network, packet_stats)
     else:
         print("Error: pktreader not initialized")
