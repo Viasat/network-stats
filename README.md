@@ -35,6 +35,11 @@ Any number of outputs may be selected (though if none are selected, the tool won
 
 -c/--csv - Uses the provided filename to create output in a comma separated format. The first line in the file is a header that describes each field. Note that if an existing file is specified, it will be entirely overwritten. Scripts and other tools should target the csv output. Tools should use the header to identify the fields they are interested in rather than blindly taking data from, say, the 3rd column. While column names will be fairly stable, new columns will be added over time, and the columns may be reordered.
 
+-e/--extcsv - Uses the provided filename to create output in a comma seperated format that includes information on individual packets. The first line in the file is a header that describes each field. Note that if an existing file is specified, it will be entirely overwritten. Tools should use the header to identify the fields they are interested in rather than blindly taking data from, say, the 3rd column. While column names will be fairly stable, new columns will be added over time, and the columns may be reordered. The new columns are:
+* packet_times: The time, in milliseconds from epoch (i.e. 1000 times unix time) that each packet in a flow arrived
+* packet_size: The size in bytes of the packet. This includes the IP header, but excludes any link layer headers (such as Ethernet headers)
+* packet_dirs: Which host the packet came from. A 1 means that that packet from the host in the IP1 field of the flow
+
 ### Examples
 `python network_stats.py -p test.pcap -s` - This command will cause network stats to open test.pcap and output summarized flow data to standard output
 
