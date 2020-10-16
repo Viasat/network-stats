@@ -2,8 +2,9 @@ Network stats relies on pcapy, which is a bit tricky to install on Windows. It i
 
 These instructions have been adapted from and updated: https://github.com/helpsystems/pcapy/wiki/Compiling-Pcapy-on-Windows-Guide
 
-1. Install Wireshark
-   1. When npcap install screen comes up, check the winpcap compatibility box
+1. Install Wireshark as administrator
+   1. Right click on the installer icon and select 'Run as administrator'
+   2. When npcap install screen comes up, check the winpcap compatibility box
 
 2. Install Python 3.8
 
