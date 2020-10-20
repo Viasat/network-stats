@@ -1,6 +1,6 @@
 Network stats relies on pcapy, which is a bit tricky to install on Windows. It is recommended to use a Linux machine or virtual machine, if one is available.
 
-These instructions have been adapted from and updated: https://github.com/helpsystems/pcapy/wiki/Compiling-Pcapy-on-Windows-Guide
+These instructions have been adapted from and updated from https://github.com/helpsystems/pcapy/wiki/Compiling-Pcapy-on-Windows-Guide (do not follow these instructions, the relevant commands are below).
 
 1. Install Wireshark as administrator
    1. Right click on the installer icon and select 'Run as administrator'
