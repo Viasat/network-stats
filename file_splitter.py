@@ -18,6 +18,9 @@ if __name__ == "__main__":
         cmd_parser.print_usage()
         exit()
 
+    # TODO: verify input file actually ends in .csv
+    filename_prefix = re.compile('(.*)\.csv').match(args.input.name).group(1)
+
     time_pattern = re.compile('\d+')
     file_header = args.input.readline()
     file_start_time = 0
@@ -29,7 +32,7 @@ if __name__ == "__main__":
     for line in args.input:
         time = int(time_pattern.match(line).group())
         if time > file_start_time + duration:
-            file_name = str(file_name_int) + '.csv'
+            file_name = filename_prefix + "-" + str(file_name_int) + '.csv'
             output_file_path = output_path / file_name
             output_file = output_file_path.open('w')
             output_file.write(file_header)
