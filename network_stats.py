@@ -14,21 +14,31 @@ from time import sleep
 import ipaddress
 import pcapy
 import impacket
+from impacket.IP6 import IP6
 from impacket import ImpactDecoder
 from impacket.ImpactPacket import IP, TCP, UDP
+import socket
 
+def is_ip_in_list(ip, iplist):
+        for i in iplist:
+            if ip in i:
+                return True
+        return False
 
 class _ConnectionKey(object):
     """ Represent a unique 5-tuple (src/dst IP/port + protocol) in manner that disregards the order
         of the source and destination. The primary purpose of this class is to allow TCP/UDP
         connections to be used as keys in native Python dictionaries.
     """
+    
     def non_local_init(self, ip1, port1, ip2, port2, proto):
         """ Initialize the ConnectionKey without regard to the whether the IP address of
             IP1 or IP2 are on the local network.
             The connection_key puts the smaller IP address in IP1. It breaks ties with port number.
         """
-        if(ip1 < ip2 or ((ip1 == ip2) and (port1 <= port2))):
+        ip1_obj = ipaddress.ip_address(ip1)
+        ip2_obj = ipaddress.ip_address(ip2)
+        if(ip1_obj < ip2_obj or ((ip1_obj == ip2_obj) and (port1 <= port2))):
             self.ip1 = ip1
             self.port1 = port1
             self.ip2 = ip2
@@ -41,7 +51,7 @@ class _ConnectionKey(object):
             self.port2 = port1
             self.proto = proto
 
-    def __init__(self, ip1, port1, ip2, port2, proto, local_network=None):
+    def __init__(self, ip1, port1, ip2, port2, proto, local_network_addresses=None):
         """ Initialize the ConnectionKey. The primary decision this method must make is
             which order to store the IP addresses (having consistent order aids in
             determining equality and display). The algorithm is:
@@ -55,15 +65,15 @@ class _ConnectionKey(object):
         """
         ip1_obj = ipaddress.ip_address(ip1)
         ip2_obj = ipaddress.ip_address(ip2)
-        if local_network is None:
+        if local_network_addresses is None or len(local_network_addresses) == 0:
             self.non_local_init(ip1, port1, ip2, port2, proto)
-        elif ip1_obj in local_network and ip2_obj not in local_network:
+        elif is_ip_in_list(ip1_obj,local_network_addresses) and not is_ip_in_list(ip2_obj,local_network_addresses):
             self.ip1 = ip1
             self.port1 = port1
             self.ip2 = ip2
             self.port2 = port2
             self.proto = proto
-        elif ip2_obj in local_network and ip1_obj not in local_network:
+        elif is_ip_in_list(ip2_obj,local_network_addresses) and not is_ip_in_list(ip1_obj,local_network_addresses):
             self.ip1 = ip2
             self.port1 = port2
             self.ip2 = ip1
@@ -74,13 +84,13 @@ class _ConnectionKey(object):
 
 
     def __hash__(self):
-        return hash((self.ip1, self.port1, self.ip2, self.port2, self.proto))
+        return hash((str(self.ip1), self.port1, str(self.ip2), self.port2, self.proto))
 
     def __eq__(self, other):
         return (isinstance(self, type(other)) and
-                self.ip1 == other.ip1 and
+                str(self.ip1) == str(other.ip1) and
                 self.port1 == other.port1 and
-                self.ip2 == other.ip2 and
+                str(self.ip2) == str(other.ip2) and
                 self.port2 == other.port2 and
                 self.proto == other.proto)
 
@@ -91,12 +101,12 @@ def pretty_out(bucket_time, bucket):
     Pretty prints the bucket time and bucket
     """
     print("============== " + str(bucket_time) + " ===============")
-    line_format = "| {0:^15} | {1:^11} | {2:^15} | {3:^11} | {4:^11} | {5:^11} | {6:^11} | {7:^11} | {8:^11} |"
+    line_format = "| {0:^24} | {1:^11} | {2:^24} | {3:^11} | {4:^11} | {5:^11} | {6:^11} | {7:^11} | {8:^11} |"
     print(line_format.format("IP1", "Port1", "IP2", "Port2", "Type", "1->2 Bytes", "2->1 Bytes",
                              "1->2 Pkts", "2->1 Pkts"))
 
     for key in bucket:
-        print(line_format.format(key.ip1, key.port1, key.ip2, key.port2, key.proto,
+        print(line_format.format(str(key.ip1), key.port1, str(key.ip2), key.port2, key.proto,
                                  bucket[key]['1to2Bytes'], bucket[key]['2to1Bytes'],
                                  bucket[key]['1to2Packets'], bucket[key]['2to1Packets']))
 
@@ -165,7 +175,7 @@ def multi_out(cb_list):
     return multi_cb
 # End of output formatting functions
 
-def process_pkts(pktreader, output_cb, live, local_network, packet_stats):
+def process_pkts(pktreader, output_cb, live, local_network_addresses, packet_stats):
     """
     The primary processing loop. Pulls a packet from the passed in pktreader, increments the byte
     and packet count of the appropriate connection (creating the connection, if necessary), and
@@ -207,12 +217,25 @@ def process_pkts(pktreader, output_cb, live, local_network, packet_stats):
             # frame. As these frames are not interesting to us, we can safely re-enter the loop
             # without making any updates
             continue
-
+        
+        prot = 0
+        src = None
+        dst = None
+        ip_len = 0
+        isAnyIP = False
         if isinstance(packet,IP):
             prot = packet.get_ip_p()
             src = packet.get_ip_src()
             dst = packet.get_ip_dst()
             ip_len = packet.get_ip_len()
+            isAnyIP = True
+        if isinstance(packet,IP6):
+            prot = packet.get_next_header()
+            src = packet.get_ip_src()
+            dst = packet.get_ip_dst()
+            ip_len = packet.get_size()
+            isAnyIP = True
+        if(isAnyIP):
             segment = packet.child()
             sport = 0
             dport = 0
@@ -222,7 +245,7 @@ def process_pkts(pktreader, output_cb, live, local_network, packet_stats):
             elif isinstance(segment,UDP):
                 sport = segment.get_uh_sport()
                 dport = segment.get_uh_dport()
-            key = _ConnectionKey(src, sport, dst, dport, prot, local_network)
+            key = _ConnectionKey(src, sport, dst, dport, prot, local_network_addresses)
             if key not in conn_bucket:
                 conn_bucket[key] = {'1to2Bytes':0, '2to1Bytes':0, '1to2Packets':0, '2to1Packets':0}
                 if packet_stats:
@@ -263,7 +286,7 @@ if __name__ == "__main__":
     cmd_parser.add_argument("-s", "--stdout", help="Print human-readable output to stdout", action="store_true")
     cmd_parser.add_argument("-c", "--csv", help="Output csv to file", type=argparse.FileType('w'))
     cmd_parser.add_argument("-e", "--extcsv", help="Output extended csv to file. Extended csv includes new columns that track the exact packet size, arrival time, and direction", type=argparse.FileType('w'))
-    cmd_parser.add_argument("-l", "--localnet", help="Subnet whose traffic should always be reported in the IP1 column. Generally used with the local network, so that all local traffic has data reported in same order (there won't be arbitrary flopping between IP1 and IP2. On a live capture, defaults to the capture interface's subnet. Example format: '192.168.0.0/24' and '10.1.2.3/32'")
+    cmd_parser.add_argument("-l", "--localnet", action='append',help="Subnet whose traffic should always be reported in the IP1 column. Generally used with the local network, so that all local traffic has data reported in same order (there won't be arbitrary flopping between IP1 and IP2. On a live capture, defaults to the capture interface's subnet. Example format: '192.168.0.0/24' and '10.1.2.3/32'")
     args = cmd_parser.parse_args()
     args_dict = vars(args)
 
@@ -274,23 +297,31 @@ if __name__ == "__main__":
     local_network = None
     packet_stats = False
 
+    local_network_list = list()
     if args.localnet is not None:
-        local_network_str = args.localnet
+        local_network_list = args_dict['localnet']
     elif args.interface is not None:
-        temp_interface = pcapy.create(args_dict['interface'])
-        local_network_str = temp_interface.getnet() + "/" + temp_interface.getmask()
+        afs = socket.getaddrinfo(socket.gethostname(),443,socket.AF_INET)
+        for af in afs:
+            local_network_list.append(af[4][0])
+        afs = socket.getaddrinfo(socket.gethostname(),443,socket.AF_INET6)
+        for af in afs:
+            local_network_list.append(af[4][0])
 
-    if local_network_str is not None:
+    local_network_addresses = list()
+    for local_network_str in local_network_list:
         try:
             local_network = ipaddress.ip_network(local_network_str)
+            local_network_addresses.append(local_network)
         except:
+            print(local_network_str + " not a valid format for IP address")
             pass
 
     # As inputs are mutually exclusive, we process these with normal if statements. Whichever flag
     # was set at the command line executes the corresponding code for opening the pktreader
     if args.interface is not None:
         #Open capture with snaplen of 100, promiscuous mode, and batch reads up into 10ms chunks
-        pktreader = pcapy.open_live(args_dict['interface'], 100, 1, 10)
+        pktreader = pcapy.open_live(args_dict['interface'], 0, 1, 10)
         live = True
     if args.pcap is not None:
         pktreader = pcapy.open_offline(args_dict['pcap'])
@@ -314,6 +345,6 @@ if __name__ == "__main__":
 
 
     if pktreader is not None:
-        process_pkts(pktreader, multi_out(output_cbs), live, local_network, packet_stats)
+        process_pkts(pktreader, multi_out(output_cbs), live, local_network_addresses, packet_stats)
     else:
         print("Error: pktreader not initialized")
