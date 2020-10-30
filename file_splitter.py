@@ -12,24 +12,27 @@ if __name__ == "__main__":
 
     args = cmd_parser.parse_args()
     output_path = Path(args.output)
-    if output_path.is_dir():
-        time_pattern = re.compile('\d+')
-        file_header = args.input.readline()
-        file_start_time = 0
-        file_name_int = 0
-        
-        output_file = None
-        duration = int(args.duration) * 60
 
-        for line in args.input:
-            time = int(time_pattern.match(line).group())
-            if time > file_start_time + duration:
-                file_name = str(file_name_int) + '.csv'
-                output_file_path = output_path / file_name
-                output_file = output_file_path.open('w')
-                output_file.write(file_header)
-                file_start_time = time
-                file_name_int+=1
-            output_file.write(line)
-    else:
-        print("Output is not a directory")
+    if False == output_path.is_dir():
+        print("Error:  Output \"" + args.output + "\" is not a directory.")
+        cmd_parser.print_usage()
+        exit()
+
+    time_pattern = re.compile('\d+')
+    file_header = args.input.readline()
+    file_start_time = 0
+    file_name_int = 0
+    
+    output_file = None
+    duration = int(args.duration) * 60
+
+    for line in args.input:
+        time = int(time_pattern.match(line).group())
+        if time > file_start_time + duration:
+            file_name = str(file_name_int) + '.csv'
+            output_file_path = output_path / file_name
+            output_file = output_file_path.open('w')
+            output_file.write(file_header)
+            file_start_time = time
+            file_name_int+=1
+        output_file.write(line)
