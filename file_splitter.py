@@ -6,8 +6,10 @@ from pathlib import Path
 
 if __name__ == "__main__":
     cmd_parser = argparse.ArgumentParser(description="Tool that splits csv files created by network-stats into 5 minute long files")
-    cmd_parser.add_argument("-i", "--input", help="csv file to be split; will not be modified", type=argparse.FileType('r'))
-    cmd_parser.add_argument("-o", "--output", help="Directory to put split files")
+    cmd_parser.add_argument("-i", "--input", help="csv file to be split; will not be modified", required=True, type=argparse.FileType('r'))
+    cmd_parser.add_argument("-o", "--output", help="Directory to put split files", default=".")
+    cmd_parser.add_argument("-d", "--duration", help="Duration in minutes to split the input file by", default=5)
+
     args = cmd_parser.parse_args()
     output_path = Path(args.output)
     if output_path.is_dir():
@@ -17,9 +19,11 @@ if __name__ == "__main__":
         file_name_int = 0
         
         output_file = None
+        duration = int(args.duration) * 60
+
         for line in args.input:
             time = int(time_pattern.match(line).group())
-            if time > file_start_time + 300:
+            if time > file_start_time + duration:
                 file_name = str(file_name_int) + '.csv'
                 output_file_path = output_path / file_name
                 output_file = output_file_path.open('w')
