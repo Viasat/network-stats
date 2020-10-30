@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 if __name__ == "__main__":
-    cmd_parser = argparse.ArgumentParser(description="Tool that splits csv files created by network-stats into 5 minute long files")
+    cmd_parser = argparse.ArgumentParser(description="Tool that splits csv files created by network-stats into separate files of shorter specified durations.")
     cmd_parser.add_argument("-i", "--input", help="csv file to be split; will not be modified", required=True, type=argparse.FileType('r'))
     cmd_parser.add_argument("-o", "--output", help="Directory to put split files", default=".")
     cmd_parser.add_argument("-d", "--duration", help="Duration in minutes to split the input file by", default=5)
